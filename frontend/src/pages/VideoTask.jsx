@@ -279,9 +279,28 @@ export default function VideoTask() {
                     key={t.id}
                     onClick={() => {
                       if (!activeVideo?.unlocked) return
-                      const unlocked = isTaskUnlocked(idx, t)
-                      if (!unlocked) return
-                      setActiveTaskId(String(t.id))
+                      if (!isTaskUnlocked(idx, t)) return
+                      // Write full task context to localStorage so CodeEditor can
+                      // restore it after a page refresh without re-fetching.
+                      const problem = [
+                        t.title,
+                        t.description || '',
+                        t.expectedOutput ? `Expected output:\n${t.expectedOutput}` : '',
+                      ].filter(Boolean).join('\n')
+                      localStorage.setItem('dm-code-eval-context', JSON.stringify({
+                        taskId: t.id,
+                        videoId: activeVideoId,
+                        language: language || activeVideo?.language || '',
+                        problemDescription: problem,
+                        starterCode: t.starterCode || '// Write your solution here\n',
+                        taskTitle: t.title,
+                        taskDescription: t.description || '',
+                        difficulty: t.difficulty || 'medium',
+                        hints: t.hints || [],
+                      }))
+                      navigate(
+                        `/code-editor?taskId=${encodeURIComponent(String(t.id))}&videoId=${encodeURIComponent(String(activeVideoId || ''))}&language=${encodeURIComponent(language || activeVideo?.language || '')}`,
+                      )
                     }}
                     style={{
                       padding: '11px 13px',
@@ -351,7 +370,11 @@ export default function VideoTask() {
                   onClick={() => {
                     if (!activeTask || !activeVideo?.unlocked) return
                     if (!activeTaskUnlocked) return
-                    const problem = `${activeTask.title}\n${activeTask.description || ''}\nExpected output:\n${activeTask.expectedOutput || ''}`.trim()
+                    const problem = [
+                      activeTask.title,
+                      activeTask.description || '',
+                      activeTask.expectedOutput ? `Expected output:\n${activeTask.expectedOutput}` : '',
+                    ].filter(Boolean).join('\n')
                     localStorage.setItem(
                       'dm-code-eval-context',
                       JSON.stringify({
@@ -359,7 +382,11 @@ export default function VideoTask() {
                         videoId: activeVideoId,
                         language: language || activeVideo?.language,
                         problemDescription: problem,
-                        starterCode: activeTask.starterCode || '',
+                        starterCode: activeTask.starterCode || '// Write your solution here\n',
+                        taskTitle: activeTask.title,
+                        taskDescription: activeTask.description || '',
+                        difficulty: activeTask.difficulty || 'medium',
+                        hints: activeTask.hints || [],
                       }),
                     )
                     navigate(

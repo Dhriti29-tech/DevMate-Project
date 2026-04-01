@@ -117,8 +117,72 @@ async function submitCodeLegacy(req, res, next) {
   }
 }
 
+/** POST /api/code/draft — upsert a draft for (userId, taskId). */
+async function saveDraft(req, res, next) {
+  try {
+    const { taskId, code, videoId } = req.body;
+    if (!taskId || typeof code !== 'string') {
+      next(new HttpError(400, 'taskId and code are required'));
+      return;
+    }
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      next(new HttpError(400, 'Invalid task id'));
+      return;
+    }
+
+    // Ownership check — user must own the task's playlist
+    const task = await userOwnsTask(req.userId, taskId);
+    if (!task) {
+      next(new HttpError(404, 'Task not found'));
+      return;
+    }
+
+    const draft = await CodeSubmission.findOneAndUpdate(
+      { userId: req.userId, taskId: task._id, isDraft: true },
+      {
+        $set: {
+          userId: req.userId,
+          taskId: task._id,
+          code,
+          isDraft: true,
+          status: 'pending',
+          submittedAt: new Date(),
+          ...(videoId && mongoose.Types.ObjectId.isValid(videoId) ? {} : {}),
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+
+    res.json({ success: true, draft });
+  } catch (e) {
+    next(e);
+  }
+}
+
+/** GET /api/code/draft/:taskId — return the latest draft code for (userId, taskId). */
+async function getDraft(req, res, next) {
+  try {
+    const { taskId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      res.json({ success: true, code: '' });
+      return;
+    }
+
+    const draft = await CodeSubmission.findOne(
+      { userId: req.userId, taskId, isDraft: true },
+      { code: 1 },
+    ).sort({ submittedAt: -1 }).lean();
+
+    res.json({ success: true, code: draft?.code || '' });
+  } catch (e) {
+    next(e);
+  }
+}
+
 module.exports = {
   submitCode,
   submitCodeLegacy,
+  saveDraft,
+  getDraft,
   codeSubmitValidators,
 };

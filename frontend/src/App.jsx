@@ -58,7 +58,8 @@ function InnerRoutes() {
           <Route path="/roadmap"       element={<Roadmap />} />
           <Route path="/video-task"    element={<VideoTask />} />
           <Route path="/code-editor"   element={<CodeEditor />} />
-          <Route path="/mini-project"  element={<MiniProject />} />
+          <Route path="/mini-project"          element={<MiniProject />} />
+          <Route path="/mini-project/:language" element={<MiniProject />} />
           <Route path="/simulation"    element={<SimulationMode />} />
           <Route path="/progress"      element={<Progress />} />
           <Route path="/job-readiness" element={<JobReadiness />} />

@@ -25,6 +25,15 @@ export function readOnboarding() {
   }
 }
 
+export function readUser() {
+  try {
+    const raw = localStorage.getItem('dm-user')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 export async function apiRequest(path, options = {}) {
   const token = getAuthToken()
   const headers = {

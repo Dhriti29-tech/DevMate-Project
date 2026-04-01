@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, Lock, PlayCircle } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import PageWrapper from '../components/PageWrapper'
 import { apiRequest } from '../utils/api'
 
-const languageTabs = [
-  { label: 'React', lang: 'React' },
-  { label: 'JavaScript', lang: 'JavaScript' },
-  { label: 'Node.js', lang: 'Node' },
-  { label: 'Python', lang: 'Python' },
-]
+// Canonical language order — matches backend LANGUAGE_ORDER exactly
+const LANGUAGE_ORDER = ['HTML', 'CSS', 'JavaScript', 'React', 'Node', 'Express', 'MongoDB']
+
+// Display labels for languages that have a different canonical name
+const DISPLAY_LABEL = {
+  Node: 'Node.js',
+  Express: 'Express.js',
+}
+
+function label(lang) {
+  return DISPLAY_LABEL[lang] || lang
+}
 
 function IconForStatus({ status }) {
   if (status === 'completed') return <CheckCircle2 size={18} color="var(--green)" />
@@ -18,8 +24,10 @@ function IconForStatus({ status }) {
   return <Lock size={18} color="var(--text2)" />
 }
 
-function resumeButtonStyle() {
-  return { padding: '9px 16px', fontSize: 13 }
+function statusText(status) {
+  if (status === 'completed') return 'Completed'
+  if (status === 'current') return 'In Progress'
+  return 'Locked'
 }
 
 export default function Roadmap() {
@@ -27,7 +35,6 @@ export default function Roadmap() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeTabLang, setActiveTabLang] = useState('React')
 
   useEffect(() => {
     let mounted = true
@@ -35,6 +42,12 @@ export default function Roadmap() {
       try {
         setLoading(true)
         setError('')
+        // GET /api/roadmap — returns { currentLanguage, completedLanguages, knownLanguages, roadmap[] }
+        // roadmap[] is built server-side from User.currentLanguage + VideoProgress completion counts.
+        // Status logic (backend):
+        //   idx < currentIdx  → 'completed'
+        //   idx === currentIdx → 'current'
+        //   idx > currentIdx  → 'locked'
         const res = await apiRequest('/roadmap')
         if (!mounted) return
         setData(res)
@@ -46,38 +59,29 @@ export default function Roadmap() {
         setLoading(false)
       }
     })()
-
-    return () => {
-      mounted = false
-    }
+    return () => { mounted = false }
   }, [])
 
-  useEffect(() => {
-    if (!data?.currentLanguage) return
-    setActiveTabLang(data.currentLanguage)
-  }, [data?.currentLanguage])
+  // Backend returns roadmap[] already ordered and with correct statuses.
+  // We re-derive from LANGUAGE_ORDER to guarantee correct ordering even if
+  // the API response order ever changes.
+  const roadmapEntries = (() => {
+    if (!data?.roadmap) return []
+    const byLang = new Map(data.roadmap.map((r) => [r.language, r.status]))
+    return LANGUAGE_ORDER.map((lang) => ({
+      language: lang,
+      status: byLang.get(lang) || 'locked',
+    }))
+  })()
 
   const currentLanguage = data?.currentLanguage || null
-  const roadmapEntries = data?.roadmap || []
-  const roadmapByLang = useMemo(() => {
-    const m = new Map()
-    for (const r of roadmapEntries) m.set(r.language, r.status)
-    return m
-  }, [roadmapEntries])
 
-  const activeExpanded = currentLanguage
-
-  const goToLanguage = (language) => {
-    if (!language) return
-    navigate(`/video-task?language=${encodeURIComponent(language)}`)
+  const goToLanguage = (lang) => {
+    navigate(`/video-task?language=${encodeURIComponent(lang)}`)
   }
 
-  const goToCurrentJourney = () => goToLanguage(currentLanguage)
-
-  const statusText = (status) => {
-    if (status === 'completed') return 'Completed'
-    if (status === 'current') return 'Current'
-    return 'Locked'
+  const goToMiniProjects = (lang) => {
+    navigate(`/mini-project/${lang.toLowerCase()}`)
   }
 
   return (
@@ -87,125 +91,87 @@ export default function Roadmap() {
         <PageWrapper>
           <h1 className="page-title">Roadmap</h1>
           <p className="page-subtitle" style={{ marginBottom: 18 }}>
-            Follow your learning journey. Progress persists after refresh.
+            Your learning path from HTML to MongoDB. Progress persists after refresh.
           </p>
 
           {error && (
-            <div
-              style={{
-                padding: 14,
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: 12,
-                color: '#b91c1c',
-                marginBottom: 16,
-              }}
-            >
+            <div style={{
+              padding: 14, background: '#fef2f2', border: '1px solid #fecaca',
+              borderRadius: 12, color: '#b91c1c', marginBottom: 16,
+            }}>
               {error}
             </div>
           )}
 
           {loading ? (
-            <div className="card" style={{ padding: 14, marginBottom: 16 }}>
-              Loading roadmap...
-            </div>
+            <div className="card" style={{ padding: 14, marginBottom: 16 }}>Loading roadmap...</div>
           ) : (
             <>
-              {/* Language pills */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  marginBottom: 18,
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                }}
-              >
-                {languageTabs.map((t) => {
-                  const isActive = activeTabLang === t.lang
-                  const status = roadmapByLang.get(t.lang) || (t.lang === currentLanguage ? 'current' : 'locked')
-                  return (
-                    <button
-                      key={t.label}
-                      onClick={() => setActiveTabLang(t.lang)}
-                      style={{
-                        borderRadius: 999,
-                        padding: '6px 14px',
-                        fontSize: 13,
-                        fontWeight: 600,
-                        background: isActive ? 'var(--accent)' : 'var(--bg3)',
-                        color: isActive ? '#fff' : 'var(--text3)',
-                        border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border2)'}`,
-                        cursor: 'pointer',
-                        transition: 'background 0.18s, border-color 0.18s, transform 0.14s',
-                        opacity: status === 'locked' && !isActive ? 0.9 : 1,
-                      }}
-                      title={statusText(status)}
-                    >
-                      {t.label}
-                    </button>
-                  )
-                })}
-              </div>
+              {/* Current language summary pill */}
+              {currentLanguage && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  padding: '6px 14px', borderRadius: 999, marginBottom: 20,
+                  background: 'var(--accent-l)', border: '1px solid var(--accent)',
+                  fontSize: 13, fontWeight: 600, color: 'var(--accent)',
+                }}>
+                  <PlayCircle size={14} />
+                  Currently learning: {label(currentLanguage)}
+                </div>
+              )}
 
               {/* Roadmap list with vertical connector */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {roadmapEntries.map((entry, i) => {
-                  const status = entry.status
+                  const { status } = entry
                   const isCurrent = status === 'current'
                   const isCompleted = status === 'completed'
                   const isLocked = status === 'locked'
-                  const isExpanded = entry.language === activeExpanded
-                  const isTabFocused = entry.language === activeTabLang
                   const isClickable = !isLocked
 
                   const borderColor = isCurrent
-                    ? 'rgba(191,219,254,0.9)'
+                    ? 'rgba(99,102,241,0.6)'
                     : isCompleted
-                      ? 'rgba(147,197,253,0.7)'
-                      : isTabFocused
-                        ? 'rgba(99,102,241,0.35)'
-                        : 'var(--border2)'
+                      ? 'rgba(16,185,129,0.4)'
+                      : 'var(--border2)'
 
-                  const background =
-                    isCurrent ? 'rgba(99,102,241,0.10)' : isCompleted ? 'rgba(16,185,129,0.06)' : 'var(--bg3)'
+                  const background = isCurrent
+                    ? 'rgba(99,102,241,0.10)'
+                    : isCompleted
+                      ? 'rgba(16,185,129,0.06)'
+                      : 'var(--bg3)'
 
                   return (
                     <div key={entry.language} style={{ display: 'grid', gridTemplateColumns: '28px 1fr', gap: 12 }}>
-                      {/* connector + icon */}
+                      {/* Vertical connector + status icon */}
                       <div style={{ display: 'flex', justifyContent: 'center' }}>
                         <div style={{ width: 20, position: 'relative', display: 'flex', flexDirection: 'column' }}>
                           <div style={{ zIndex: 2, marginTop: 2 }}>
                             <IconForStatus status={status} />
                           </div>
                           {i < roadmapEntries.length - 1 && (
-                            <div
-                              style={{
-                                width: 2,
-                                background: 'var(--border)',
-                                flex: 1,
-                                marginTop: 8,
-                              }}
-                            />
+                            <div style={{
+                              width: 2,
+                              background: isCompleted ? 'var(--green)' : 'var(--border)',
+                              flex: 1,
+                              marginTop: 8,
+                              opacity: isCompleted ? 0.4 : 1,
+                            }} />
                           )}
                         </div>
                       </div>
 
-                      {/* card */}
+                      {/* Language card */}
                       <div
                         className="card"
+                        role={isClickable ? 'button' : undefined}
                         style={{
-                          padding: '12px 14px',
-                          borderRadius: 12,
-                          background,
-                          backdropFilter: 'blur(10px)',
-                          opacity: isLocked ? 0.55 : 1,
-                          border: `1px solid ${borderColor}`,
-                          boxShadow: 'none',
+                          padding: '12px 14px', borderRadius: 12, background,
+                          backdropFilter: 'blur(10px)', opacity: isLocked ? 0.5 : 1,
+                          border: `1px solid ${borderColor}`, boxShadow: 'none',
                           transition: 'transform 0.15s, border-color 0.18s, background 0.18s',
-                          ...(isClickable
-                            ? {}
-                            : { pointerEvents: 'none' }),
+                          cursor: isClickable ? 'pointer' : 'default',
+                          pointerEvents: isLocked ? 'none' : 'auto',
                         }}
                         onMouseEnter={(e) => {
                           if (!isClickable) return
@@ -218,62 +184,71 @@ export default function Roadmap() {
                           e.currentTarget.style.background = background
                           e.currentTarget.style.transform = 'none'
                         }}
-                        onClick={() => {
-                          if (!isClickable) return
-                          // Only navigate on click for non-locked nodes.
-                          goToLanguage(entry.language)
-                        }}
-                        role={isClickable ? 'button' : undefined}
+                        onClick={() => { if (isClickable) goToMiniProjects(entry.language) }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start' }}>
                           <div>
                             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>
-                              {entry.language}
+                              {label(entry.language)}
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text2)' }}>{statusText(status)}</div>
                           </div>
 
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-                            {isCompleted && (
-                              <span className="badge badge-green" style={{ fontSize: 11 }}>
-                                Completed
-                              </span>
-                            )}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                            {isCompleted && <span className="badge badge-green" style={{ fontSize: 11 }}>Completed ✓</span>}
+                            {isCurrent && <span className="badge badge-cyan" style={{ fontSize: 11 }}>Current</span>}
+                            {isLocked && <span className="badge badge-orange" style={{ fontSize: 11 }}>Locked 🔒</span>}
                             {isCurrent && (
-                              <span className="badge badge-cyan" style={{ fontSize: 11 }}>
-                                Current
-                              </span>
-                            )}
-                            {isLocked && (
-                              <span className="badge badge-orange" style={{ fontSize: 11 }}>
-                                Locked
-                              </span>
-                            )}
-
-                            {isCurrent && (
-                              <button className="btn-primary" style={resumeButtonStyle()} onClick={(e) => { e.stopPropagation(); goToCurrentJourney() }}>
+                              <button
+                                className="btn-primary"
+                                style={{ padding: '7px 14px', fontSize: 12 }}
+                                onClick={(e) => { e.stopPropagation(); goToLanguage(entry.language) }}
+                              >
                                 Resume →
+                              </button>
+                            )}
+                            {isCurrent && (
+                              <button
+                                className="btn-secondary"
+                                style={{ padding: '5px 12px', fontSize: 12 }}
+                                onClick={(e) => { e.stopPropagation(); goToMiniProjects(entry.language) }}
+                              >
+                                🧪 Projects
+                              </button>
+                            )}
+                            {isCompleted && (
+                              <button
+                                className="btn-secondary"
+                                style={{ padding: '5px 12px', fontSize: 12 }}
+                                onClick={(e) => { e.stopPropagation(); goToLanguage(entry.language) }}
+                              >
+                                Review
+                              </button>
+                            )}
+                            {isCompleted && (
+                              <button
+                                className="btn-secondary"
+                                style={{ padding: '5px 12px', fontSize: 12 }}
+                                onClick={(e) => { e.stopPropagation(); goToMiniProjects(entry.language) }}
+                              >
+                                🧪 Projects
                               </button>
                             )}
                           </div>
                         </div>
 
-                        {/* Current module highlight (only current expanded) */}
-                        {isExpanded && (
-                          <div
-                            style={{
-                              marginTop: 12,
-                              padding: 14,
-                              borderRadius: 12,
-                              background: 'var(--bg3)',
-                              border: '1px solid var(--accent-l)',
-                            }}
-                          >
-                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', marginBottom: 6 }}>
+                        {/* Expanded panel — only for current language */}
+                        {isCurrent && (
+                          <div style={{
+                            marginTop: 12, padding: 14, borderRadius: 10,
+                            background: 'var(--bg3)', border: '1px solid var(--accent-l)',
+                          }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent)', marginBottom: 4 }}>
                               Current module
                             </div>
                             <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-                              Continue with your video journey for <strong>{entry.language}</strong>.
+                              Continue your video journey for <strong>{label(entry.language)}</strong>.
+                              Complete all videos to unlock the next language.
                             </div>
                           </div>
                         )}
@@ -283,9 +258,7 @@ export default function Roadmap() {
                 })}
 
                 {roadmapEntries.length === 0 && !loading && (
-                  <div className="card" style={{ padding: 14 }}>
-                    No roadmap data available yet.
-                  </div>
+                  <div className="card" style={{ padding: 14 }}>No roadmap data yet.</div>
                 )}
               </div>
             </>
