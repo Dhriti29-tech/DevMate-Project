@@ -41,6 +41,7 @@ export default function Dashboard() {
   const roadmaps = dashboardData?.roadmaps || []
   const recentProjects = dashboardData?.recentProjects || []
   const continueLearning = dashboardData?.continueLearning || null
+  const currentLanguage = dashboardData?.currentLanguage || null
 
   const maxProgress = useMemo(() => {
     if (!Array.isArray(roadmaps) || roadmaps.length === 0) return 0
@@ -67,7 +68,14 @@ export default function Dashboard() {
                 background: 'linear-gradient(135deg, var(--text), var(--accent))',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
               }}>Good morning 👋</h1>
-              <p className="page-subtitle">You're on a {streak}-day streak. Keep it going.</p>
+              <p className="page-subtitle">
+                You're on a {streak}-day streak. Keep it going.
+                {currentLanguage && !loading && (
+                  <span style={{ marginLeft: 8, color: 'var(--accent)', fontWeight: 600 }}>
+                    Currently learning: {currentLanguage}
+                  </span>
+                )}
+              </p>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <ThemeToggle />
@@ -213,7 +221,10 @@ export default function Dashboard() {
                 <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => navigate('/roadmap')}>View all</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {roadmaps.map((r) => (
+                {loading && (
+                  <div style={{ fontSize: 13, color: 'var(--text3)' }}>Loading roadmap...</div>
+                )}
+                {!loading && roadmaps.map((r) => (
                   <div key={r.language}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ fontSize: 13, fontWeight: 500 }}>{r.language}</span>
@@ -224,8 +235,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
-
-                {roadmaps.length === 0 && (
+                {!loading && roadmaps.length === 0 && (
                   <div className="card" style={{ padding: 12 }}>No roadmap data yet.</div>
                 )}
               </div>

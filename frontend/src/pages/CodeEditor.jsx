@@ -44,8 +44,18 @@ export default function CodeEditor() {
       hints:              Array.isArray(stored?.hints) ? stored.hints : [],
       starterCode:        stored?.starterCode        || FALLBACK_CODE,
       problemDescription: stored?.problemDescription || '',
+      // Mini project fields (set when opened from MiniProject page)
+      miniProjectId:      stored?.miniProjectId      || null,
+      miniProjectLang:    stored?.miniProjectLang    || null,
     }
     setCtx(resolved)
+
+    // If this is a mini project, the starterCode already contains savedCode
+    // (set by MiniProject.jsx before navigating). Just use it directly.
+    if (resolved.miniProjectId) {
+      setCode(resolved.starterCode || FALLBACK_CODE)
+      return
+    }
 
     // Load draft: try backend first, fall back to localStorage
     if (taskId) {
@@ -144,32 +154,72 @@ export default function CodeEditor() {
 
   // ── Save draft ────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!ctx?.taskId) {
+    if (!ctx?.taskId && !ctx?.miniProjectId) {
       setSaveResult({ success: false, message: 'No task selected.' })
       return
     }
     setSaving(true)
     setSaveResult(null)
 
-    // Always write to localStorage immediately as a backup
+    // Mini project save path
+    if (ctx.miniProjectId) {
+      try {
+        await apiRequest('/mini-projects/save-code', {
+          method: 'POST',
+          body: JSON.stringify({ language: ctx.miniProjectLang, projectId: ctx.miniProjectId, code }),
+        })
+        // Also update localStorage context so refresh restores the code
+        const stored = (() => { try { return JSON.parse(localStorage.getItem('dm-code-eval-context') || 'null') } catch { return null } })()
+        if (stored) localStorage.setItem('dm-code-eval-context', JSON.stringify({ ...stored, starterCode: code }))
+        setSaveResult({ success: true, message: 'Draft saved ✅' })
+      } catch (e) {
+        setSaveResult({ success: false, message: e.message || 'Save failed.' })
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    // Task draft save path
     const lsKey = `dm-draft-${ctx.taskId}`
-    try { localStorage.setItem(lsKey, code) } catch { /* storage full — ignore */ }
+    try { localStorage.setItem(lsKey, code) } catch { /* storage full */ }
 
     try {
       await apiRequest('/code/draft', {
         method: 'POST',
-        body: JSON.stringify({
-          taskId: ctx.taskId,
-          videoId: ctx.videoId || '',
-          code,
-        }),
+        body: JSON.stringify({ taskId: ctx.taskId, videoId: ctx.videoId || '', code }),
       })
       setSaveResult({ success: true, message: 'Draft saved ✅' })
-    } catch (e) {
-      // Backend failed but localStorage backup already written
+    } catch {
       setSaveResult({ success: true, message: 'Draft saved locally (offline backup)' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ── Submit task (after passing evaluation) ───────────────────────────────
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmitTask = async () => {
+    if (!ctx?.taskId || !aiResult?.passed) return
+    setSubmitting(true)
+    try {
+      await apiRequest('/tasks/complete', {
+        method: 'POST',
+        body: JSON.stringify({
+          taskId:        ctx.taskId,
+          submittedCode: code,
+          aiScore:       aiResult.score,
+        }),
+      })
+      // Navigate back to video page — refreshTasks param forces task list reload
+      navigate(
+        `/video-task?language=${encodeURIComponent(ctx.language || '')}&videoId=${encodeURIComponent(ctx.videoId || '')}&refreshTasks=${Date.now()}`,
+      )
+    } catch (e) {
+      setSaveResult({ success: false, message: e.message || 'Submission failed.' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -208,20 +258,6 @@ export default function CodeEditor() {
         optimizedCode: res.optimizedCode || null,
         passed:        res.passed,
       })
-
-      // If AI passed, also mark task complete
-      if (res.passed && ctx?.taskId) {
-        apiRequest('/tasks/complete', {
-          method: 'POST',
-          body: JSON.stringify({ taskId: ctx.taskId }),
-        }).catch(() => {})
-        // Refresh task list
-        if (ctx.videoId) {
-          apiRequest(`/tasks/${ctx.videoId}`)
-            .then((r) => setTasks(r.tasks || []))
-            .catch(() => {})
-        }
-      }
     } catch (e) {
       setAiResult({ error: e.message || 'AI evaluation failed. Please try again.' })
     } finally {
@@ -273,6 +309,17 @@ export default function CodeEditor() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {/* Submit Task — only visible after a passing evaluation */}
+            {aiResult?.passed && ctx?.taskId && (
+              <button
+                className="btn-primary"
+                style={{ padding: '7px 16px', fontSize: 13, background: 'var(--green)', opacity: submitting ? 0.75 : 1 }}
+                onClick={handleSubmitTask}
+                disabled={submitting || evaluating || saving}
+              >
+                {submitting ? 'Submitting...' : '✅ Submit Task'}
+              </button>
+            )}
             {/* Save without AI */}
             <button
               className="btn-secondary"
@@ -610,6 +657,18 @@ export default function CodeEditor() {
                         >
                           🔄 Re-evaluate
                         </button>
+
+                        {/* Submit Task — prominent CTA when passed */}
+                        {aiResult.passed && ctx?.taskId && (
+                          <button
+                            className="btn-primary"
+                            style={{ width: '100%', padding: '10px', fontSize: 13, fontWeight: 700, background: 'var(--green)', opacity: submitting ? 0.75 : 1 }}
+                            onClick={handleSubmitTask}
+                            disabled={submitting}
+                          >
+                            {submitting ? 'Submitting...' : '✅ Submit Task & Unlock Next'}
+                          </button>
+                        )}
                       </div>
                     )
                   })()}

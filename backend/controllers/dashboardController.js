@@ -6,8 +6,9 @@ const VideoProgress = require('../models/VideoProgress');
 const CodeSubmission = require('../models/CodeSubmission');
 const Roadmap = require('../models/Roadmap');
 const User = require('../models/User');
+const UserSkill = require('../models/UserSkill');
 
-const LANGUAGE_ORDER = ['HTML', 'CSS', 'JavaScript', 'React', 'Node', 'Express', 'MongoDB'];
+const DEFAULT_LANGUAGE_ORDER = ['HTML', 'CSS', 'JavaScript', 'React', 'Node', 'Express', 'MongoDB'];
 
 function formatDurationSeconds(seconds) {
   const n = Number(seconds || 0);
@@ -62,7 +63,7 @@ async function getDashboard(req, res, next) {
     const userId = req.userId;
 
     // Streak is stored on user and updated on /auth/login.
-    const user = await User.findById(userId).select('streakCount').lean();
+    const user = await User.findById(userId).select('streakCount currentLanguage').lean();
     const streak = user?.streakCount || 0;
 
     const topicsDone = await VideoProgress.countDocuments({ userId, completed: true });
@@ -78,26 +79,57 @@ async function getDashboard(req, res, next) {
     // XP computed dynamically from completion counts.
     const xpPoints = topicsDone * 10 + tasksSubmitted * 5 + projectsBuilt * 20;
 
-    const roadmaps = LANGUAGE_ORDER.map((language) => ({
-      language,
-      progress: 0,
-    }));
+    // ── Roadmap progress ──────────────────────────────────────────────────
+    // Use the user's actual language list:
+    //   - custom journey  → UserSkill.customLanguages (user-defined order)
+    //   - default journey → UserSkill.knownLanguages or DEFAULT_LANGUAGE_ORDER
+    // Progress = completed videos / total videos per language (0–100).
+    const skill = await UserSkill.findOne({ userId }).lean();
+    const isCustom = skill?.startMode === 'custom';
 
-    // Roadmap progress based on completed videos per language.
-    const vpRows = await VideoProgress.find({ userId, language: { $in: LANGUAGE_ORDER } })
+    let languageList;
+    if (isCustom && Array.isArray(skill?.customLanguages) && skill.customLanguages.length > 0) {
+      languageList = skill.customLanguages;
+    } else if (Array.isArray(skill?.knownLanguages) && skill.knownLanguages.length > 0) {
+      // For default/assessment journeys show only languages the user selected,
+      // falling back to the full default order if nothing was selected yet.
+      languageList = DEFAULT_LANGUAGE_ORDER;
+    } else {
+      languageList = DEFAULT_LANGUAGE_ORDER;
+    }
+
+    // Fetch all VideoProgress rows for this user in one query
+    const vpRows = await VideoProgress.find({ userId })
       .select('language completed')
       .lean();
-    const totalsByLang = new Map();
+
+    const totalsByLang    = new Map();
     const completedByLang = new Map();
     for (const row of vpRows) {
-      totalsByLang.set(row.language, (totalsByLang.get(row.language) || 0) + 1);
-      if (row.completed) completedByLang.set(row.language, (completedByLang.get(row.language) || 0) + 1);
+      if (!row.language) continue;
+      totalsByLang.set(row.language,    (totalsByLang.get(row.language)    || 0) + 1);
+      if (row.completed)
+        completedByLang.set(row.language, (completedByLang.get(row.language) || 0) + 1);
     }
-    for (const item of roadmaps) {
-      const total = totalsByLang.get(item.language) || 0;
-      const completed = completedByLang.get(item.language) || 0;
-      item.progress = total ? Math.round((completed / total) * 100) : 0;
-    }
+
+    // Only include languages that have at least one video loaded,
+    // OR are in the user's language list (show 0% for not-yet-started ones).
+    const roadmaps = languageList.map((language) => {
+      const total     = totalsByLang.get(language)    || 0;
+      const completed = completedByLang.get(language) || 0;
+      return {
+        language,
+        progress: total > 0 ? Math.round((completed / total) * 100) : 0,
+      };
+    });
+
+    // currentLanguage: first language in the list that isn't fully completed
+    const currentLanguage = (() => {
+      const userCurrent = user?.currentLanguage;
+      if (userCurrent) return userCurrent;
+      const notDone = roadmaps.find((r) => r.progress < 100);
+      return notDone?.language || languageList[0] || null;
+    })();
 
     // Recent projects: proxy recent "projects" using the last 3 passed code submissions.
     const recentSubs = await CodeSubmission.find({ userId, status: 'passed' })
@@ -150,6 +182,7 @@ async function getDashboard(req, res, next) {
       projectsBuilt,
       tasksSubmitted,
       jobReadiness: 0,
+      currentLanguage,
       roadmaps,
       recentProjects,
       continueLearning,

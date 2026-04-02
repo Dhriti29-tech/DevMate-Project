@@ -82,18 +82,8 @@ export default function VideoTask() {
       setTasksLoading(true)
       setTasksError('')
       try {
-        // Generate tasks (AI optional) using the current video title.
-        // Even if AI fails, backend seeds fallback tasks so UI never stays empty.
-        // eslint-disable-next-line no-console
-        console.log('Video Title:', activeVideo?.title)
-        await apiRequest('/generate-tasks', {
-          method: 'POST',
-          body: JSON.stringify({
-            videoId: activeVideoId,
-            videoTitle: activeVideo?.title || '',
-          }),
-        })
-
+        // GET /tasks/:videoId — backend calls ensureTasksForVideo internally,
+        // which generates tasks once and never regenerates them.
         const res = await apiRequest(`/tasks/${activeVideoId}`)
         setTasks(res.tasks || [])
       } catch (e) {
@@ -106,7 +96,7 @@ export default function VideoTask() {
 
     loadTasks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeVideoId, refreshTasksKey, activeVideo?.title])
+  }, [activeVideoId, refreshTasksKey])
 
   const orderedTasks = useMemo(() => {
     return [...tasks].sort((a, b) => (a.order || 0) - (b.order || 0))

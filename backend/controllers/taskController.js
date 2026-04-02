@@ -62,12 +62,16 @@ async function getTasksForVideo(req, res, next) {
 }
 
 function completeTaskValidators() {
-  return [body('taskId').notEmpty().withMessage('taskId is required')];
+  return [
+    body('taskId').notEmpty().withMessage('taskId is required'),
+    body('submittedCode').optional().isString(),
+    body('aiScore').optional().isNumeric(),
+  ];
 }
 
 async function completeTask(req, res, next) {
   try {
-    const { taskId } = req.body;
+    const { taskId, submittedCode = '', aiScore = null } = req.body;
     if (!mongoose.Types.ObjectId.isValid(taskId)) {
       next(new HttpError(400, 'Invalid task id'));
       return;
@@ -89,11 +93,14 @@ async function completeTask(req, res, next) {
     await Progress.findOneAndUpdate(
       { userId: req.userId, taskId: task._id },
       {
-        userId: req.userId,
-        videoId: video._id,
-        taskId: task._id,
-        completed: true,
-        completedAt: new Date(),
+        userId:        req.userId,
+        videoId:       video._id,
+        taskId:        task._id,
+        completed:     true,
+        completedAt:   new Date(),
+        submittedCode: submittedCode || '',
+        aiScore:       typeof aiScore === 'number' ? aiScore : null,
+        submittedAt:   new Date(),
       },
       { upsert: true, new: true },
     );
@@ -108,7 +115,30 @@ async function completeTask(req, res, next) {
 
     await recalculateJobReadiness(req.userId);
 
-    res.json({ success: true, message: 'Task marked complete' });
+    // Return the full updated task list for this video so the caller
+    // can update UI state without a second round-trip.
+    const allTasks = await Task.find({ videoId: video._id }).sort({ order: 1 }).lean();
+    const taskIds  = allTasks.map((t) => t._id);
+    const progressRows = await Progress.find({
+      userId: req.userId,
+      taskId: { $in: taskIds },
+      completed: true,
+    }).select('taskId').lean();
+    const completedSet = new Set(progressRows.map((p) => p.taskId.toString()));
+
+    const tasks = allTasks.map((t, idx) => ({
+      id:             t._id,
+      title:          t.title,
+      description:    t.description,
+      difficulty:     t.difficulty,
+      starterCode:    t.starterCode,
+      expectedOutput: t.expectedOutput,
+      hints:          t.hints,
+      order:          t.order,
+      completed:      completedSet.has(t._id.toString()),
+    }));
+
+    res.json({ success: true, message: 'Task marked complete', tasks });
   } catch (e) {
     next(e);
   }
