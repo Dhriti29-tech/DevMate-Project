@@ -8,7 +8,7 @@ const assessmentResultSchema = new mongoose.Schema(
     score:         { type: Number, min: 0, max: 100, required: true },
     passed:        { type: Boolean, default: false },
     feedback:      { type: String, default: '' },
-    errors:        [{ type: String }],
+    errorMessages: [{ type: String }],
     suggestions:   [{ type: String }],
   },
   { timestamps: true },

@@ -46,7 +46,7 @@ async function getAssessments(req, res, next) {
               score:       byLanguage[t.language].score,
               passed:      byLanguage[t.language].passed,
               feedback:    byLanguage[t.language].feedback    || '',
-              errors:      byLanguage[t.language].errors      || [],
+              errors:      byLanguage[t.language].errorMessages || byLanguage[t.language].errors || [],
               suggestions: byLanguage[t.language].suggestions || [],
               updatedAt:   byLanguage[t.language].updatedAt,
             }
@@ -86,7 +86,7 @@ async function submitAssessment(req, res, next) {
           score:         evaluation.score,
           passed:        evaluation.passed,
           feedback:      evaluation.feedback || '',
-          errors:        evaluation.errors   || [],
+          errorMessages: evaluation.errors   || [],
           suggestions:   evaluation.suggestions || [],
         },
       },
