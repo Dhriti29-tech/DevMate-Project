@@ -23,11 +23,38 @@ export default function VideoTask() {
   const [activeTaskId, setActiveTaskId] = useState(null)
   const [videoHover, setVideoHover] = useState(false)
 
-  // ── Change playlist modal ─────────────────────────────────────────────────
+  // ── Change / Upload playlist modal ───────────────────────────────────────
   const [showChangeModal, setShowChangeModal] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
   const [newPlaylistUrl, setNewPlaylistUrl]   = useState('')
   const [changing, setChanging]               = useState(false)
   const [changeError, setChangeError]         = useState('')
+
+  // Upload playlist for a language that has none yet
+  const handleUploadPlaylist = async () => {
+    if (!newPlaylistUrl.trim()) { setChangeError('Please paste a YouTube playlist URL.'); return }
+    if (!language) { setChangeError('No language selected.'); return }
+    setChanging(true)
+    setChangeError('')
+    try {
+      const res = await apiRequest('/playlists/load', {
+        method: 'POST',
+        body: JSON.stringify({ language, playlistUrl: newPlaylistUrl.trim() }),
+      })
+      setPlaylistId(res.playlistId || null)
+      setVideos(res.videos || [])
+      setTasks([])
+      setActiveTaskId(null)
+      const first = (res.videos || []).find((v) => v.unlocked) || res.videos?.[0] || null
+      setActiveVideoId(first?.id ? String(first.id) : null)
+      setShowUploadModal(false)
+      setNewPlaylistUrl('')
+    } catch (e) {
+      setChangeError(e.message || 'Failed to load playlist.')
+    } finally {
+      setChanging(false)
+    }
+  }
 
   const handleChangePlaylist = async () => {
     if (!newPlaylistUrl.trim()) { setChangeError('Please paste a YouTube playlist URL.'); return }
@@ -39,7 +66,6 @@ export default function VideoTask() {
         method: 'PUT',
         body: JSON.stringify({ language, playlistUrl: newPlaylistUrl.trim() }),
       })
-      // Reload the video list with the new playlist
       setPlaylistId(res.playlistId || null)
       setVideos(res.videos || [])
       setTasks([])
@@ -54,6 +80,22 @@ export default function VideoTask() {
       setChanging(false)
     }
   }
+
+  // Shared modal for both upload and change — only the title/action differs
+  const openUpload = () => { setNewPlaylistUrl(''); setChangeError(''); setShowUploadModal(true) }
+  const openChange = () => { setNewPlaylistUrl(''); setChangeError(''); setShowChangeModal(true) }
+
+  // ── Language completion state ─────────────────────────────────────────────
+  const [languageCompleted, setLanguageCompleted] = useState(false)
+  const [nextLanguage, setNextLanguage]           = useState(null)
+  const [nextHasPlaylist, setNextHasPlaylist]     = useState(false)
+
+  // Recompute completion whenever videos change
+  useEffect(() => {
+    if (videos.length === 0) { setLanguageCompleted(false); return }
+    const allDone = videos.every((v) => v.completed)
+    setLanguageCompleted(allDone)
+  }, [videos])
 
   const activeVideo = useMemo(
     () => videos.find((v) => String(v.id) === String(activeVideoId)) || null,
@@ -94,7 +136,13 @@ export default function VideoTask() {
           const pick = preferredVideoId
             ? res.videos.find((v) => String(v.id) === String(preferredVideoId)) || firstUnlocked
             : firstUnlocked
-          setActiveVideoId(pick?.id != null ? String(pick.id) : null)
+          // Validate the id is a real ObjectId before storing
+          const rawId = pick?.id != null ? String(pick.id) : null
+          const validId = rawId && /^[a-f\d]{24}$/i.test(rawId) ? rawId : null
+          if (!validId && rawId) {
+            console.warn('[VideoTask] Video id from API is not a valid ObjectId:', rawId)
+          }
+          setActiveVideoId(validId)
         } else {
           setActiveVideoId(null)
         }
@@ -111,11 +159,18 @@ export default function VideoTask() {
   useEffect(() => {
     const loadTasks = async () => {
       if (!activeVideoId) return
+
+      // Guard: ensure activeVideoId is a valid 24-char MongoDB ObjectId hex string
+      // before sending to the backend. Prevents "Invalid video id" 400 errors.
+      const isValidObjectId = /^[a-f\d]{24}$/i.test(String(activeVideoId))
+      if (!isValidObjectId) {
+        console.warn('[VideoTask] Skipping task load — activeVideoId is not a valid ObjectId:', activeVideoId)
+        return
+      }
+
       setTasksLoading(true)
       setTasksError('')
       try {
-        // GET /tasks/:videoId — backend calls ensureTasksForVideo internally,
-        // which generates tasks once and never regenerates them.
         const res = await apiRequest(`/tasks/${activeVideoId}`)
         setTasks(res.tasks || [])
       } catch (e) {
@@ -241,7 +296,7 @@ export default function VideoTask() {
             <button
               className="btn-secondary"
               style={{ padding: '7px 14px', fontSize: 13 }}
-              onClick={() => { setShowChangeModal(true); setChangeError(''); setNewPlaylistUrl('') }}
+              onClick={openChange}
             >
               🔄 Change Playlist
             </button>
@@ -251,17 +306,54 @@ export default function VideoTask() {
           </div>
         </div>
 
-        {/* ── Change Playlist Modal ── */}
+        {/* ── Upload Playlist Modal (no existing playlist) ── */}
+        {showUploadModal && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}>
+            <div className="card" style={{ maxWidth: 460, width: '100%', padding: 28, borderRadius: 16, animation: 'fadeUp 0.2s ease both' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
+                Upload Playlist — {language}
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 18, lineHeight: 1.6 }}>
+                Paste a YouTube playlist URL to start your <strong>{language}</strong> learning journey.
+              </p>
+              <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6 }}>YouTube Playlist URL</label>
+              <input
+                type="text" value={newPlaylistUrl}
+                onChange={(e) => setNewPlaylistUrl(e.target.value)}
+                placeholder="https://www.youtube.com/playlist?list=..."
+                style={{
+                  width: '100%', padding: '10px 14px', borderRadius: 8, boxSizing: 'border-box',
+                  background: 'var(--bg3)', border: '1px solid var(--border2)',
+                  color: 'var(--text)', fontSize: 14, outline: 'none', marginBottom: 8,
+                }}
+                onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
+                onBlur={(e)  => { e.target.style.borderColor = 'var(--border2)' }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleUploadPlaylist() }}
+                autoFocus
+              />
+              {changeError && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>{changeError}</div>}
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowUploadModal(false)} disabled={changing}>Cancel</button>
+                <button className="btn-primary" style={{ flex: 1, opacity: changing ? 0.75 : 1 }} onClick={handleUploadPlaylist} disabled={changing}>
+                  {changing ? 'Loading...' : 'Load Playlist'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Change Playlist Modal (existing playlist) ── */}
         {showChangeModal && (
           <div style={{
             position: 'fixed', inset: 0, zIndex: 100,
             background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
           }}>
-            <div className="card" style={{
-              maxWidth: 460, width: '100%', padding: 28,
-              borderRadius: 16, animation: 'fadeUp 0.2s ease both',
-            }}>
+            <div className="card" style={{ maxWidth: 460, width: '100%', padding: 28, borderRadius: 16, animation: 'fadeUp 0.2s ease both' }}>
               <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
                 Change Playlist — {language}
               </div>
@@ -269,42 +361,25 @@ export default function VideoTask() {
                 This will remove the current playlist and all its task progress for <strong>{language}</strong>.
                 Other languages are not affected.
               </p>
-              <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6 }}>
-                New YouTube Playlist URL
-              </label>
+              <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6 }}>New YouTube Playlist URL</label>
               <input
-                type="text"
-                value={newPlaylistUrl}
+                type="text" value={newPlaylistUrl}
                 onChange={(e) => setNewPlaylistUrl(e.target.value)}
                 placeholder="https://www.youtube.com/playlist?list=..."
                 style={{
                   width: '100%', padding: '10px 14px', borderRadius: 8, boxSizing: 'border-box',
                   background: 'var(--bg3)', border: '1px solid var(--border2)',
                   color: 'var(--text)', fontSize: 14, outline: 'none', marginBottom: 8,
-                  transition: 'border-color 0.18s',
                 }}
                 onFocus={(e) => { e.target.style.borderColor = 'var(--accent)' }}
                 onBlur={(e)  => { e.target.style.borderColor = 'var(--border2)' }}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleChangePlaylist() }}
+                autoFocus
               />
-              {changeError && (
-                <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>{changeError}</div>
-              )}
+              {changeError && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>{changeError}</div>}
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button
-                  className="btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={() => setShowChangeModal(false)}
-                  disabled={changing}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn-primary"
-                  style={{ flex: 1, opacity: changing ? 0.75 : 1 }}
-                  onClick={handleChangePlaylist}
-                  disabled={changing}
-                >
+                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowChangeModal(false)} disabled={changing}>Cancel</button>
+                <button className="btn-primary" style={{ flex: 1, opacity: changing ? 0.75 : 1 }} onClick={handleChangePlaylist} disabled={changing}>
                   {changing ? 'Updating...' : 'Update Playlist'}
                 </button>
               </div>
@@ -318,7 +393,31 @@ export default function VideoTask() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', height: 'calc(100vh - 73px)' }}>
+        {/* ── No playlist empty state ── */}
+        {!journeyLoading && !playlistId && language && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            flex: 1, padding: 40, textAlign: 'center', minHeight: 'calc(100vh - 73px)',
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
+              No playlist selected yet
+            </div>
+            <p style={{ fontSize: 14, color: 'var(--text3)', marginBottom: 24, maxWidth: 380, lineHeight: 1.6 }}>
+              Upload a YouTube playlist to start your <strong>{language}</strong> learning journey.
+              Tasks will be generated automatically for each video.
+            </p>
+            <button
+              className="btn-primary"
+              style={{ padding: '11px 28px', fontSize: 14, fontWeight: 600 }}
+              onClick={openUpload}
+            >
+              📤 Upload Playlist
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: playlistId ? 'grid' : 'none', gridTemplateColumns: '1fr 340px', height: 'calc(100vh - 73px)' }}>
           {/* Left */}
           <div style={{ borderRight: '1px solid #e8e8e4', display: 'flex', flexDirection: 'column', background: '#fff', animation: 'fadeUp 0.3s ease both' }}>
             {/* Video player */}
@@ -556,8 +655,15 @@ export default function VideoTask() {
             )}
 
             {!journeyLoading && videos.length === 0 && (
-              <div className="card" style={{ marginBottom: 18 }}>
-                No playlist loaded yet.
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>No playlist yet</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+                  Upload a playlist to start learning {language}.
+                </div>
+                <button className="btn-primary" style={{ fontSize: 12, padding: '7px 16px' }} onClick={openUpload}>
+                  Upload Playlist
+                </button>
               </div>
             )}
 

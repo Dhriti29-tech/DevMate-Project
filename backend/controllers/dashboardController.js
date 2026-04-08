@@ -7,6 +7,7 @@ const CodeSubmission = require('../models/CodeSubmission');
 const Roadmap = require('../models/Roadmap');
 const User = require('../models/User');
 const UserSkill = require('../models/UserSkill');
+const JobReadiness = require('../models/JobReadiness');
 
 const DEFAULT_LANGUAGE_ORDER = ['HTML', 'CSS', 'JavaScript', 'React', 'Node', 'Express', 'MongoDB'];
 
@@ -76,13 +77,13 @@ async function getDashboard(req, res, next) {
     ]);
     const projectsBuilt = projectAgg?.[0]?.sum || 0;
 
-    // XP = accumulated (preserved across resets) + current session activity.
-    // user.totalXP holds XP earned in all previous journeys.
-    // Current session XP is computed from live completion counts.
+    // Job readiness — read from pre-calculated JobReadiness document
+    const jr = await JobReadiness.findOne({ userId }).lean();
+    const jobReadiness = jr?.overallScore ?? 0;
+
+    // XP = accumulated (preserved across resets) + current session activity
     const sessionXP = topicsDone * 10 + tasksSubmitted * 5 + projectsBuilt * 20;
     const xpPoints  = (user?.totalXP || 0) + sessionXP;
-
-    console.log(`[Dashboard] userId: ${userId} | totalXP: ${user?.totalXP || 0} | sessionXP: ${sessionXP} | xpPoints: ${xpPoints}`);
 
     // ── Roadmap progress ──────────────────────────────────────────────────
     // Use the user's actual language list:
@@ -186,7 +187,7 @@ async function getDashboard(req, res, next) {
       topicsDone,
       projectsBuilt,
       tasksSubmitted,
-      jobReadiness: 0,
+      jobReadiness,
       currentLanguage,
       roadmaps,
       recentProjects,

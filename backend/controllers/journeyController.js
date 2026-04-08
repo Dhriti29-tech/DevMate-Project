@@ -3,9 +3,19 @@ const Playlist = require('../models/Playlist');
 const Video = require('../models/Video');
 const VideoProgress = require('../models/VideoProgress');
 const User = require('../models/User');
+const UserSkill = require('../models/UserSkill');
 const { HttpError } = require('../middleware/errorHandler');
 
-const LANGUAGE_ORDER = ['HTML', 'CSS', 'JavaScript', 'React', 'Node', 'Express', 'MongoDB'];
+const DEFAULT_LANGUAGE_ORDER = ['HTML', 'CSS', 'JavaScript', 'React', 'Node', 'Express', 'MongoDB'];
+
+// Returns the ordered language list for this user (custom or default)
+async function getLanguageOrder(userId) {
+  const skill = await UserSkill.findOne({ userId }).lean();
+  if (skill?.startMode === 'custom' && Array.isArray(skill?.customLanguages) && skill.customLanguages.length > 0) {
+    return skill.customLanguages;
+  }
+  return DEFAULT_LANGUAGE_ORDER;
+}
 
 async function assertPlaylistOwner(playlistId, userId) {
   const playlist = await Playlist.findOne({ _id: playlistId, userId });
@@ -151,13 +161,21 @@ async function completeVideo(req, res, next) {
         if (!completed.includes(language)) completed.push(language);
         user.completedLanguages = completed;
 
-        const idx = LANGUAGE_ORDER.indexOf(language);
-        nextLanguage = idx >= 0 && idx < LANGUAGE_ORDER.length - 1 ? LANGUAGE_ORDER[idx + 1] : null;
+        // Use the user's actual language order (custom or default)
+        const languageOrder = await getLanguageOrder(req.userId);
+        const idx = languageOrder.indexOf(language);
+        nextLanguage = idx >= 0 && idx < languageOrder.length - 1 ? languageOrder[idx + 1] : null;
         user.currentLanguage = nextLanguage;
         user.upcomingLanguages = nextLanguage
-          ? LANGUAGE_ORDER.slice(idx + 2)
+          ? languageOrder.slice(idx + 2)
           : [];
         await user.save();
+
+        // Also update UserSkill.currentLanguage for custom journeys
+        await UserSkill.findOneAndUpdate(
+          { userId: req.userId },
+          { $set: { currentLanguage: nextLanguage } },
+        ).catch(() => {});
       }
     }
 
@@ -178,5 +196,47 @@ async function completeVideo(req, res, next) {
   }
 }
 
-module.exports = { listJourneyVideos, completeVideo };
+// ── GET /api/journey/status/:language ────────────────────────────────────
+// Returns completion status for a language and what the next language is.
+async function getLanguageStatus(req, res, next) {
+  try {
+    const language = (req.params.language || '').trim();
+    if (!language) { next(new HttpError(400, 'language is required')); return; }
+
+    const playlist = await Playlist.findOne({ userId: req.userId, language }).sort({ createdAt: -1 });
+    if (!playlist) {
+      return res.json({ success: true, language, hasPlaylist: false, languageCompleted: false, nextLanguage: null });
+    }
+
+    const totalVideos     = await Video.countDocuments({ playlistId: playlist._id });
+    const completedVideos = await VideoProgress.countDocuments({ userId: req.userId, playlistId: playlist._id, completed: true });
+    const languageCompleted = totalVideos > 0 && completedVideos >= totalVideos;
+
+    const languageOrder = await getLanguageOrder(req.userId);
+    const idx = languageOrder.indexOf(language);
+    const nextLanguage = idx >= 0 && idx < languageOrder.length - 1 ? languageOrder[idx + 1] : null;
+
+    // Check if next language already has a playlist
+    let nextHasPlaylist = false;
+    if (nextLanguage) {
+      const nextPlaylist = await Playlist.findOne({ userId: req.userId, language: nextLanguage });
+      nextHasPlaylist = !!nextPlaylist;
+    }
+
+    res.json({
+      success: true,
+      language,
+      hasPlaylist: true,
+      totalVideos,
+      completedVideos,
+      languageCompleted,
+      nextLanguage,
+      nextHasPlaylist,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+module.exports = { listJourneyVideos, completeVideo, getLanguageStatus };
 
