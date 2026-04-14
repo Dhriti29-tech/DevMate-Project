@@ -1,24 +1,3 @@
-# Dependencies
-node_modules/
-
-# Environment variables — NEVER commit these
-.env
-.env.local
-.env.development
-.env.production
-.env.*
-
-# Build output
-dist/
-build/
-
-# Logs
-*.log
-npm-debug.log*
-
-# OS
+node_modules
 .DS_Store
-Thumbs.db
-
-# Vite
-vite.config.js.timestamp-*
+.env

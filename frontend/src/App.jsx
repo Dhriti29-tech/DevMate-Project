@@ -20,8 +20,6 @@ import OnboardingAssessment from './pages/OnboardingAssessment'
 import BeginnerHtmlStart from './pages/BeginnerHtmlStart'
 import PlaylistInputPage from './pages/PlaylistInputPage'
 import OnboardingCustomJourney from './pages/OnboardingCustomJourney'
-import GitHubCallback from './pages/GitHubCallback'
-import GithubDashboard from './pages/GithubDashboard'
 import { getAuthToken, readOnboarding } from './utils/api'
 
 function RequireAuthAndOnboarding({ children }) {
@@ -68,7 +66,6 @@ function InnerRoutes() {
           <Route path="/job-readiness" element={<JobReadiness />} />
           <Route path="/profile"       element={<Profile />} />
           <Route path="/certificate"   element={<Certificate />} />
-          <Route path="/github-dashboard" element={<GithubDashboard />} />
         </Routes>
       </AppLayout>
     </RequireAuthAndOnboarding>
@@ -88,7 +85,6 @@ export default function App() {
         <Route path="/onboarding/assessment" element={<OnboardingRoute mode="assessment" />} />
         <Route path="/onboarding/html-playlist" element={<PlaylistInputPage />} />
         <Route path="/onboarding/custom-journey" element={<OnboardingCustomJourney />} />
-        <Route path="/auth/github/success"    element={<GitHubCallback />} />
         <Route path="/journey/playlist" element={<PlaylistInputPage />} />
         <Route path="/*"            element={<InnerRoutes />} />
         <Route path="*"             element={<Navigate to="/" />} />

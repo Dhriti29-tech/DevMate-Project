@@ -2,9 +2,6 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const session = require('express-session');
-const passport = require('passport');
-require('./config/githubAuth');
 const connectDB = require('./config/db');
 const routes = require('./routes');
 const { errorHandler, HttpError } = require('./middleware/errorHandler');
@@ -20,21 +17,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '2mb' }));
 
-app.use(session({
-  secret: process.env.JWT_SECRET || 'devmate_session_secret',
-  resave: false,
-  saveUninitialized: false,
-}));
-app.use(passport.initialize());
-app.use(passport.session());
-
 app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'devmate-api' });
 });
-
-// GitHub OAuth routes — mounted at /auth/github to match callback URL
-const githubRoutes = require('./routes/github.routes');
-app.use('/auth/github', githubRoutes);
 
 app.use('/api', routes);
 
