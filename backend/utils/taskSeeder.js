@@ -41,61 +41,75 @@ async function generateTasksWithOpenRouter(videoTitle) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return { ok: false, tasks: null, reason: 'Missing OPENROUTER_API_KEY' };
 
-  const model = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3-8b-instruct';
+  // Use the same model as the rest of the AI system
+  const model = (process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat').trim();
 
-  const aiPrompt = `Generate 2 coding tasks based on the following video topic.\n\nVideo Title:\n"${videoTitle}"\n\nReturn response in JSON format:\n{\n "tasks": [\n   {\n     "title": "Task name",\n     "description": "Task description"\n   }\n ]\n}\n`;
+  const aiPrompt = [
+    `Generate exactly 2 practical coding tasks based on this video topic: "${videoTitle}"`,
+    '',
+    'Return ONLY valid JSON, no markdown, no explanation:',
+    '{',
+    '  "tasks": [',
+    '    { "title": "Task name", "description": "Clear task description", "difficulty": "easy|medium|hard" },',
+    '    { "title": "Task name", "description": "Clear task description", "difficulty": "easy|medium|hard" }',
+    '  ]',
+    '}',
+    '',
+    'IMPORTANT: Start your response with { and end with }. Nothing outside the JSON.',
+  ].join('\n');
 
   const requestBody = {
     model,
-    messages: [
-      {
-        role: 'user',
-        content: aiPrompt,
-      },
-    ],
+    messages: [{ role: 'user', content: aiPrompt }],
     temperature: 0,
-    response_format: { type: 'json_object' },
-    max_tokens: 500,
+    max_tokens: 400,
+    // response_format intentionally omitted — not supported by all OpenRouter models
   };
 
-  console.log('Video Title:', videoTitle);
+  console.log('[TaskSeeder] Generating tasks for:', videoTitle, '| model:', model);
 
   const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost:5173',
+      'X-Title': 'DevMate',
     },
     body: JSON.stringify(requestBody),
   });
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`OpenRouter error ${resp.status}: ${text || 'Unknown error'}`);
+    console.error('[TaskSeeder] OpenRouter error:', resp.status, text.slice(0, 200));
+    return { ok: false, tasks: null, reason: `OpenRouter error ${resp.status}` };
   }
 
   const response = await resp.json();
-
-  // Expected extraction:
-  // response.data.choices[0].message.content
   const content =
     response?.data?.choices?.[0]?.message?.content ??
     response?.choices?.[0]?.message?.content ??
     null;
 
-  const aiText = content;
-  console.log('AI Raw Response:', aiText);
+  console.log('[TaskSeeder] AI response:', String(content || '').slice(0, 300));
 
-  if (!aiText || typeof aiText !== 'string') {
+  if (!content || typeof content !== 'string') {
     return { ok: false, tasks: null, reason: 'Missing AI message content' };
   }
 
+  // Extract JSON — strip markdown fences and slice from first { to last }
+  const stripped = content.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+  const start = stripped.indexOf('{');
+  const end   = stripped.lastIndexOf('}');
+  if (start === -1 || end === -1) return { ok: false, tasks: null, reason: 'No JSON object in response' };
+
   try {
-    const parsed = JSON.parse(aiText);
+    const parsed = JSON.parse(stripped.slice(start, end + 1));
     const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : null;
     if (!tasks || tasks.length === 0) return { ok: false, tasks: null, reason: 'No tasks in AI response' };
     return { ok: true, tasks };
   } catch (e) {
+    console.warn('[TaskSeeder] JSON parse failed:', e.message);
     return { ok: false, tasks: null, reason: 'JSON parse failed' };
   }
 }
