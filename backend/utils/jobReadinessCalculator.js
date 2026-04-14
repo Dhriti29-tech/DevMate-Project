@@ -4,11 +4,12 @@
  */
 
 const WEIGHTS = {
-  completion: 0.25,
-  codeQuality: 0.25,
-  debugging: 0.2,
+  completion: 0.20,
+  codeQuality: 0.20,
+  debugging: 0.15,
   project: 0.15,
   consistency: 0.15,
+  github: 0.15,   // GitHub activity dimension
 };
 
 function clamp(n, min = 0, max = 100) {
@@ -27,6 +28,7 @@ function round1(n) {
  * @param {Array<{ status?: string, executionResult?: { score?: number } }>} params.submissions
  * @param {number} params.miniProjectsCompleted
  * @param {number} params.distinctActiveDays - streak proxy (optional)
+ * @param {number} params.githubScore - GitHub activity score 0-100 (optional)
  */
 function computeJobReadinessScores(params) {
   const {
@@ -36,6 +38,7 @@ function computeJobReadinessScores(params) {
     submissions = [],
     miniProjectsCompleted = 0,
     distinctActiveDays = 0,
+    githubScore = 0,
   } = params;
 
   const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
@@ -74,20 +77,22 @@ function computeJobReadinessScores(params) {
   const codingScore = round1((codeQuality * 0.55 + conceptAccuracy * 0.45));
 
   const overallScore = Math.round(
-    completionRate * WEIGHTS.completion +
-      codeQuality * WEIGHTS.codeQuality +
-      debuggingScore * WEIGHTS.debugging +
-      projectScore * WEIGHTS.project +
-      consistencyScore * WEIGHTS.consistency,
+    completionRate  * WEIGHTS.completion +
+    codeQuality     * WEIGHTS.codeQuality +
+    debuggingScore  * WEIGHTS.debugging +
+    projectScore    * WEIGHTS.project +
+    consistencyScore * WEIGHTS.consistency +
+    githubScore     * WEIGHTS.github,
   );
 
   return {
-    codingScore: clamp(codingScore, 0, 100),
-    debuggingScore: round1(debuggingScore),
-    projectScore: round1(projectScore),
+    codingScore:      clamp(codingScore, 0, 100),
+    debuggingScore:   round1(debuggingScore),
+    projectScore:     round1(projectScore),
     consistencyScore: round1(consistencyScore),
-    conceptAccuracy: round1(conceptAccuracy),
-    overallScore: clamp(overallScore, 0, 100),
+    conceptAccuracy:  round1(conceptAccuracy),
+    githubScore:      round1(clamp(githubScore)),
+    overallScore:     clamp(overallScore, 0, 100),
   };
 }
 

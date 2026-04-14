@@ -304,6 +304,53 @@ async function getFullProfile(req, res, next) {
     if (xpPoints >= 500)
       achievements.push({ icon: '⭐', title: 'XP Milestone',   desc: `Earned ${xpPoints} XP` })
 
+    // ── GitHub achievements ───────────────────────────────────────────────
+    const githubUser = await User.findById(userId).select('+github.accessToken').lean()
+    if (githubUser?.github?.accessToken) {
+      try {
+        const axios = require('axios')
+        const headers = {
+          Authorization: `token ${githubUser.github.accessToken}`,
+          Accept: 'application/vnd.github+json',
+        }
+
+        const { data: repos } = await axios.get(
+          'https://api.github.com/user/repos?per_page=100&sort=updated',
+          { headers }
+        )
+
+        const repoCount  = repos.length
+        const totalStars = repos.reduce((s, r) => s + r.stargazers_count, 0)
+        const languages  = [...new Set(repos.map(r => r.language).filter(Boolean))]
+
+        // Commit count across all repos (approximate via events)
+        let totalCommits = 0
+        try {
+          const { data: events } = await axios.get(
+            `https://api.github.com/users/${githubUser.github.username}/events?per_page=100`,
+            { headers }
+          )
+          totalCommits = events.filter(e => e.type === 'PushEvent')
+            .reduce((s, e) => s + (e.payload?.commits?.length || 0), 0)
+        } catch { /* non-fatal */ }
+
+        if (repoCount >= 1)
+          achievements.push({ icon: '🐙', title: 'GitHub Connected', desc: 'Linked your GitHub account', category: 'github' })
+        if (repoCount >= 5)
+          achievements.push({ icon: '🏗️', title: 'Builder',          desc: `Created ${repoCount} repositories`, category: 'github' })
+        if (repoCount >= 10)
+          achievements.push({ icon: '🏭', title: 'Prolific Builder',  desc: `${repoCount} repos and counting`, category: 'github' })
+        if (totalStars >= 10)
+          achievements.push({ icon: '⭐', title: 'Star Collector',    desc: `Earned ${totalStars} stars on GitHub`, category: 'github' })
+        if (languages.length >= 3)
+          achievements.push({ icon: '🌐', title: 'Polyglot',          desc: `Coding in ${languages.length} languages`, category: 'github' })
+        if (totalCommits >= 10)
+          achievements.push({ icon: '💾', title: 'Committer',         desc: `${totalCommits}+ commits pushed`, category: 'github' })
+        if (totalCommits >= 100)
+          achievements.push({ icon: '🔄', title: 'Consistent Dev',    desc: '100+ commits — keep shipping!', category: 'github' })
+      } catch { /* GitHub API unavailable — skip silently */ }
+    }
+
     res.json({
       success: true,
       name:              user.name,

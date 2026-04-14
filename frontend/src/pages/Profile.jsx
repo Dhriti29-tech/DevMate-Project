@@ -227,14 +227,20 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* ── GitHub placeholder ── */}
+              {/* ── GitHub ── */}
               <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ fontSize: 28 }}>🐙</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>GitHub</div>
                   <div style={{ fontSize: 13, color: 'var(--text3)' }}>Connect your GitHub to showcase real repositories</div>
                 </div>
-                <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: 13 }}>Connect</button>
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '8px 16px', fontSize: 13 }}
+                  onClick={() => navigate('/github-dashboard')}
+                >
+                  View GitHub →
+                </button>
               </div>
             </>
           )}

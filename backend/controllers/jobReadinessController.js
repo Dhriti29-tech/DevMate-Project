@@ -8,13 +8,14 @@ async function getScore(req, res, next) {
     res.json({
       success: true,
       score: doc || {
-        codingScore: 0,
-        debuggingScore: 0,
-        projectScore: 0,
+        codingScore:      0,
+        debuggingScore:   0,
+        projectScore:     0,
         consistencyScore: 0,
-        conceptAccuracy: 0,
-        overallScore: 0,
-        lastUpdated: null,
+        conceptAccuracy:  0,
+        githubScore:      0,
+        overallScore:     0,
+        lastUpdated:      null,
       },
     });
   } catch (e) {
@@ -31,10 +32,11 @@ async function getReport(req, res, next) {
     const strengths = [];
     const weaknesses = [];
     const dims = [
-      ['Coding & concepts', doc?.codingScore ?? 0],
-      ['Debugging & delivery', doc?.debuggingScore ?? 0],
-      ['Projects & portfolio', doc?.projectScore ?? 0],
-      ['Consistency', doc?.consistencyScore ?? 0],
+      ['Coding & concepts',    doc?.codingScore      ?? 0],
+      ['Debugging & delivery', doc?.debuggingScore   ?? 0],
+      ['Projects & portfolio', doc?.projectScore     ?? 0],
+      ['Consistency',          doc?.consistencyScore ?? 0],
+      ['GitHub activity',      doc?.githubScore      ?? 0],
     ];
     for (const [label, val] of dims) {
       if (val >= 70) strengths.push({ skill: label, score: Math.round(val) });

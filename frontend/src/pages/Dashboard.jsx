@@ -1,312 +1,450 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
-import PageWrapper from '../components/PageWrapper'
 import ThemeToggle from '../components/ThemeToggle'
-import { apiRequest } from '../utils/api'
+import CodeBackground from '../components/CodeBackground'
+import { apiRequest, readUser } from '../utils/api'
+
+const LANG_COLORS = {
+  HTML: '#e34c26', CSS: '#06b6d4', JavaScript: '#f7df1e',
+  React: '#61dafb', Node: '#68a063', Express: '#7c3aed', MongoDB: '#10b981',
+}
+const LANG_ICONS = {
+  HTML: '🌐', CSS: '🎨', JavaScript: '⚡', React: '⚛️',
+  Node: '🟢', Express: '🚂', MongoDB: '🍃',
+}
+
+function TopBar({ name, onUpgrade }) {
+  const [search, setSearch] = useState('')
+  const [showBell, setShowBell] = useState(false)
+  const navigate = useNavigate()
+  const initials = name ? name.slice(0, 2).toUpperCase() : 'DV'
+
+  const notifications = [
+    { icon: '🔥', text: "Keep your streak going — log in daily!", time: 'Just now' },
+    { icon: '🎯', text: "You're close to 70% job readiness", time: '2h ago' },
+    { icon: '📚', text: 'New mini projects available for React', time: '1d ago' },
+  ]
+
+  return (
+    <div style={{
+      height: 56, display: 'flex', alignItems: 'center',
+      justifyContent: 'space-between', padding: '0 32px',
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--bg2)', backdropFilter: 'blur(12px)',
+      position: 'sticky', top: 0, zIndex: 10,
+      transition: 'background 0.3s, border-color 0.3s',
+    }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
+        Good morning, <span style={{ color: 'var(--cyan)' }}>{name || 'Developer'}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {/* Search */}
+        <div style={{ position: 'relative' }}>
+          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search resources..."
+            style={{
+              padding: '7px 12px 7px 32px', borderRadius: 8, fontSize: 13,
+              background: 'var(--bg3)', border: '1px solid var(--border2)',
+              color: 'var(--text2)', outline: 'none', width: 200,
+              transition: 'background 0.3s, border-color 0.3s',
+            }}
+          />
+        </div>
+
+        {/* Theme toggle */}
+        <ThemeToggle />
+
+        {/* Notification bell */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowBell(v => !v)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, position: 'relative' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <div style={{
+              position: 'absolute', top: 2, right: 2, width: 7, height: 7,
+              borderRadius: '50%', background: 'var(--red)',
+              border: '1.5px solid var(--bg2)',
+            }} />
+          </button>
+
+          {showBell && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 19 }} onClick={() => setShowBell(false)} />
+              <div style={{
+                position: 'absolute', right: 0, top: 36, width: 300, zIndex: 20,
+                background: 'var(--card)', border: '1px solid var(--border2)',
+                borderRadius: 12, boxShadow: 'var(--shadow)',
+                overflow: 'hidden', animation: 'fadeUp 0.15s ease both',
+              }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                  Notifications
+                </div>
+                {notifications.map((n, i) => (
+                  <div key={i} style={{
+                    padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'flex-start',
+                    borderBottom: i < notifications.length - 1 ? '1px solid var(--border)' : 'none',
+                    cursor: 'pointer', transition: 'background 0.15s',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-l)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: 18 }}>{n.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>{n.text}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{n.time}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Avatar */}
+        <div onClick={() => navigate('/profile')} style={{
+          width: 34, height: 34, borderRadius: '50%', cursor: 'pointer',
+          background: 'linear-gradient(135deg, var(--accent), var(--cyan))',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700, color: '#fff',
+          border: '2px solid var(--accent)',
+        }}>
+          {initials}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const [dashboardData, setDashboardData] = useState(null)
+  const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error, setError]     = useState('')
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const user = readUser()
 
   useEffect(() => {
     let mounted = true
-    ;(async () => {
-      try {
-        setLoading(true)
-        setError('')
-        const data = await apiRequest('/dashboard')
-        if (mounted) setDashboardData(data)
-      } catch (e) {
-        if (mounted) setError(e.message || 'Failed to load dashboard')
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    })()
-    return () => {
-      mounted = false
-    }
+    apiRequest('/dashboard')
+      .then(d => { if (mounted) setData(d) })
+      .catch(e => { if (mounted) setError(e.message) })
+      .finally(() => { if (mounted) setLoading(false) })
+    return () => { mounted = false }
   }, [])
 
-  const roadmaps = dashboardData?.roadmaps || []
-  const recentProjects = dashboardData?.recentProjects || []
-  const continueLearning = dashboardData?.continueLearning || null
-  const currentLanguage = dashboardData?.currentLanguage || null
+  const roadmaps         = data?.roadmaps         || []
+  const recentProjects   = data?.recentProjects   || []
+  const continueLearning = data?.continueLearning || null
+  const topicsDone       = data?.topicsDone       ?? 0
+  const projectsBuilt    = data?.projectsBuilt    ?? 0
+  const tasksSubmitted   = data?.tasksSubmitted   ?? 0
+  const jobReadiness     = data?.jobReadiness     ?? 0
+  const streak           = data?.streak           ?? 0
+  const xpPoints         = data?.xpPoints         ?? 0
+  const currentLanguage  = data?.currentLanguage  || null
 
-  const maxProgress = useMemo(() => {
-    if (!Array.isArray(roadmaps) || roadmaps.length === 0) return 0
-    return Math.max(...roadmaps.map((r) => r.progress || 0))
-  }, [roadmaps])
+  const maxProgress = useMemo(() =>
+    roadmaps.length ? Math.max(...roadmaps.map(r => r.progress || 0)) : 0
+  , [roadmaps])
 
-  const topicsDone = dashboardData?.topicsDone ?? 0
-  const projectsBuilt = dashboardData?.projectsBuilt ?? 0
-  const tasksSubmitted = dashboardData?.tasksSubmitted ?? 0
-  const jobReadiness = dashboardData?.jobReadiness ?? 0
-  const streak = dashboardData?.streak ?? 0
-  const xpPoints = dashboardData?.xpPoints ?? 0
+  const card = {
+    background: 'var(--card)', border: '1px solid var(--border)',
+    borderRadius: 14, transition: 'background 0.3s, border-color 0.3s',
+  }
 
   return (
-    <div className="page-layout">
-      <Sidebar />
-      <main className="main-content">
-        <PageWrapper>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', position: 'relative' }}>
+      <CodeBackground />
+      <Sidebar onUpgrade={() => setShowUpgrade(true)} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', zIndex: 1 }}>
+        <TopBar name={user?.name} onUpgrade={() => setShowUpgrade(true)} />
+
+        <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto', background: 'var(--bg)' }}>
+
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
             <div>
-              <h1 style={{
-                fontSize: 26, fontWeight: 800, marginBottom: 4, letterSpacing: -0.5,
-                background: 'linear-gradient(135deg, var(--text), var(--accent))',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              }}>Good morning 👋</h1>
-              <p className="page-subtitle">
-                You're on a {streak}-day streak. Keep it going.
-                {currentLanguage && !loading && (
-                  <span style={{ marginLeft: 8, color: 'var(--accent)', fontWeight: 600 }}>
-                    Currently learning: {currentLanguage}
-                  </span>
-                )}
-              </p>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', marginBottom: 6, letterSpacing: -0.5 }}>
+                Good morning 👋
+              </h1>
+              {currentLanguage && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--cyan)' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cyan)', boxShadow: '0 0 6px var(--cyan)' }} />
+                  Currently learning: <strong>{currentLanguage}</strong>
+                </div>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <ThemeToggle />
-              <div className="card card-3d" style={{
-                padding: '12px 18px', textAlign: 'center', minWidth: 90,
-                borderTop: `2px solid var(--orange)`,
-              }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--orange)' }}>{streak}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>Day streak 🔥</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ ...card, padding: '10px 16px', minWidth: 80, textAlign: 'center', borderTop: '2px solid var(--red)' }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--red)' }}>{streak}</div>
+                <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>DAY STREAK 🔥</div>
               </div>
-              <div className="card card-3d" style={{
-                padding: '12px 18px', textAlign: 'center', minWidth: 90,
-                borderTop: `2px solid var(--accent)`,
-              }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>{xpPoints}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>XP points ⭐</div>
+              <div style={{ ...card, padding: '10px 16px', minWidth: 80, textAlign: 'center', borderTop: '2px solid var(--orange)' }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--orange)' }}>{xpPoints}</div>
+                <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>XP POINTS ⭐</div>
               </div>
             </div>
           </div>
 
           {error && (
-            <div style={{ padding: 14, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, marginBottom: 18, color: '#b91c1c' }}>
+            <div style={{ padding: 14, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, marginBottom: 20, color: '#b91c1c', fontSize: 13 }}>
               {error}
             </div>
           )}
 
           {/* Progress banner */}
-          <div className="card" style={{
-            marginBottom: 20,
-            borderLeft: '3px solid var(--accent)',
-            background: 'linear-gradient(135deg, var(--accent-l), rgba(6,182,212,0.06))',
-            position: 'relative', overflow: 'hidden',
-          }}>
-            {/* subtle shine line */}
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-              background: 'linear-gradient(90deg, transparent, var(--accent), transparent)',
-              opacity: 0.4,
-            }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ ...card, padding: '20px 24px', marginBottom: 20, borderLeft: '3px solid var(--accent)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>Your Learning Progress</div>
-                <div style={{ color: 'var(--text3)', fontSize: 13 }}>
-                  {topicsDone} videos completed · {tasksSubmitted} tasks completed
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
+                  Your Learning Progress
+                </div>
+                <div style={{ display: 'flex', gap: 32 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Videos completed</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text)' }}>{topicsDone}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tasks completed</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--cyan)' }}>{tasksSubmitted}</div>
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent)' }}>{maxProgress}%</span>
-                <button className="btn-primary" style={{ padding: '8px 18px', fontSize: 13 }} onClick={() => navigate('/video-task')}>
-                  Resume →
-                </button>
-              </div>
+              <button onClick={() => navigate('/video-task')} className="btn-primary" style={{ padding: '10px 22px' }}>
+                Resume →
+              </button>
             </div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${maxProgress}%` }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1, height: 6, borderRadius: 99, background: 'var(--bg3)' }}>
+                <div style={{
+                  height: '100%', borderRadius: 99, width: `${maxProgress}%`,
+                  background: 'linear-gradient(90deg, var(--accent), var(--cyan))',
+                  transition: 'width 0.8s ease',
+                }} />
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', minWidth: 36 }}>{maxProgress}%</span>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid-4" style={{ marginBottom: 20 }}>
-            <div className="card card-3d" style={{
-              textAlign: 'center',
-              animation: 'fadeUp 0.3s ease 0ms both',
-              borderTop: `2px solid var(--green)`,
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)',
-                width: 60, height: 60, borderRadius: '50%',
-                background: 'var(--green)', opacity: 0.08, filter: 'blur(16px)',
-                pointerEvents: 'none',
-              }} />
-              <div style={{ fontSize: 11, marginBottom: 6 }}>✅</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--green)', marginBottom: 4, position: 'relative' }}>
-                {topicsDone}
+          {/* 4 stat cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 24 }}>
+            {[
+              { label: 'TOPICS DONE',     value: topicsDone,          sub: '/∞',  color: 'var(--green)'  },
+              { label: 'PROJECTS BUILT',  value: projectsBuilt,       sub: '/10', color: 'var(--cyan)'   },
+              { label: 'TASKS SUBMITTED', value: tasksSubmitted,      sub: '',    color: 'var(--accent)' },
+              { label: 'JOB READINESS',   value: `${jobReadiness}%`,  sub: '',    color: 'var(--orange)' },
+            ].map((s, i) => (
+              <div key={i} style={{ ...card, padding: '18px 20px', cursor: 'default' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow)' }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' }}
+              >
+                <div style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>{s.label}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: 30, fontWeight: 800, color: s.color }}>{s.value}</span>
+                  {s.sub && <span style={{ fontSize: 13, color: 'var(--text3)' }}>{s.sub}</span>}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Topics done</div>
-            </div>
-
-            <div className="card card-3d" style={{
-              textAlign: 'center',
-              animation: 'fadeUp 0.3s ease 60ms both',
-              borderTop: `2px solid var(--cyan)`,
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)',
-                width: 60, height: 60, borderRadius: '50%',
-                background: 'var(--cyan)', opacity: 0.08, filter: 'blur(16px)',
-                pointerEvents: 'none',
-              }} />
-              <div style={{ fontSize: 11, marginBottom: 6 }}>🏗️</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--cyan)', marginBottom: 4, position: 'relative' }}>
-                {projectsBuilt}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Projects built</div>
-            </div>
-
-            <div className="card card-3d" style={{
-              textAlign: 'center',
-              animation: 'fadeUp 0.3s ease 120ms both',
-              borderTop: `2px solid var(--accent)`,
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)',
-                width: 60, height: 60, borderRadius: '50%',
-                background: 'var(--accent)', opacity: 0.08, filter: 'blur(16px)',
-                pointerEvents: 'none',
-              }} />
-              <div style={{ fontSize: 11, marginBottom: 6 }}>📝</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--accent)', marginBottom: 4, position: 'relative' }}>
-                {tasksSubmitted}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Tasks submitted</div>
-            </div>
-
-            <div className="card card-3d" style={{
-              textAlign: 'center',
-              animation: 'fadeUp 0.3s ease 180ms both',
-              borderTop: `2px solid var(--orange)`,
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)',
-                width: 60, height: 60, borderRadius: '50%',
-                background: 'var(--orange)', opacity: 0.08, filter: 'blur(16px)',
-                pointerEvents: 'none',
-              }} />
-              <div style={{ fontSize: 11, marginBottom: 6 }}>🎯</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--orange)', marginBottom: 4, position: 'relative' }}>
-                {jobReadiness}%
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Job readiness</div>
-            </div>
+            ))}
           </div>
 
-          <div className="grid-2" style={{ marginBottom: 20 }}>
+          {/* Roadmaps + Recent projects */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+
             {/* Roadmaps */}
-            <div className="card">
+            <div style={{ ...card, padding: '20px 22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>Your roadmaps</span>
-                <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => navigate('/roadmap')}>View all</button>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Your roadmaps</span>
+                <button onClick={() => navigate('/roadmap')} style={{ background: 'none', border: 'none', color: 'var(--cyan)', fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>View all →</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {loading && (
-                  <div style={{ fontSize: 13, color: 'var(--text3)' }}>Loading roadmap...</div>
-                )}
-                {!loading && roadmaps.map((r) => (
+                {loading ? (
+                  [...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 36, borderRadius: 8 }} />)
+                ) : roadmaps.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '20px 0' }}>No roadmap yet.</div>
+                ) : roadmaps.map(r => (
                   <div key={r.language}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{r.language}</span>
-                      <span style={{ fontSize: 13, color: 'var(--text3)' }}>{r.progress}%</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                          background: `${LANG_COLORS[r.language] || 'var(--accent)'}18`,
+                          border: `1px solid ${LANG_COLORS[r.language] || 'var(--accent)'}33`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
+                        }}>
+                          {LANG_ICONS[r.language] || '📘'}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{r.language}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text3)' }}>{r.progress}% complete</div>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: LANG_COLORS[r.language] || 'var(--accent)' }}>{r.progress}%</span>
                     </div>
-                    <div className="progress-bar">
-                      <div className="progress-fill" style={{ width: `${r.progress}%`, background: 'var(--accent)' }} />
+                    <div style={{ height: 4, borderRadius: 99, background: 'var(--bg3)' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 99, width: `${r.progress}%`,
+                        background: LANG_COLORS[r.language] || 'var(--accent)',
+                        transition: 'width 0.7s ease',
+                        boxShadow: `0 0 8px ${LANG_COLORS[r.language] || 'var(--accent)'}66`,
+                      }} />
                     </div>
                   </div>
                 ))}
-                {!loading && roadmaps.length === 0 && (
-                  <div className="card" style={{ padding: 12 }}>No roadmap data yet.</div>
-                )}
               </div>
             </div>
 
             {/* Recent projects */}
-            <div className="card">
+            <div style={{ ...card, padding: '20px 22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>Recent projects</span>
-                <button className="btn-secondary" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => navigate('/mini-project')}>View all</button>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Recent projects</span>
+                <button onClick={() => navigate('/mini-project')} style={{ background: 'none', border: 'none', color: 'var(--cyan)', fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>View All →</button>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {recentProjects.map((p, i) => (
-                  <div
-                    key={i}
-                    className="row-click"
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '9px 12px',
-                      background: 'var(--bg3)',
-                      borderRadius: 8,
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{p.title}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text3)' }}>{p.language}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span className={`badge ${p.status === 'Completed' ? 'badge-green' : 'badge-cyan'}`}>{p.status}</span>
-                      {typeof p.score === 'number' && (
-                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{p.score}/100</div>
-                      )}
-                    </div>
+              {recentProjects.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 20px' }}>
+                  <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>🚀</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>No projects built yet</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 18, lineHeight: 1.6 }}>
+                    Complete your first few tasks to unlock guided project builds and start building your portfolio.
                   </div>
-                ))}
-
-                {recentProjects.length === 0 && (
-                  <div className="card" style={{ padding: 12 }}>No completed projects yet.</div>
-                )}
-              </div>
+                  <button onClick={() => navigate('/mini-project')} style={{
+                    padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    background: 'var(--accent-l)', border: '1px solid var(--accent)',
+                    color: 'var(--accent)', cursor: 'pointer',
+                  }}>Browse Ideas</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {recentProjects.map((p, i) => (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px 14px', borderRadius: 10,
+                      background: 'var(--bg3)', border: '1px solid var(--border)',
+                      cursor: 'pointer', transition: 'border-color 0.15s',
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{p.title}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>{p.language}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span className="badge badge-green">{p.status}</span>
+                        {typeof p.score === 'number' && (
+                          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{p.score}/100</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Continue learning */}
+          {/* Continue Learning */}
           {continueLearning && (
-            <div className="card">
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Continue learning</div>
-              <div
-                className="card-click"
-                onClick={() => navigate('/video-task')}
-                style={{
-                  padding: '16px',
-                  background: 'var(--bg3)',
-                  borderRadius: 10,
-                  border: '1px solid var(--border)',
-                  borderTop: '2px solid var(--accent)',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  gap: 16,
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6, color: 'var(--text)' }}>
-                    {continueLearning.title}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                    {continueLearning.type} {continueLearning.duration ? `· ${continueLearning.duration}` : ''}
+            <div style={{ ...card, padding: '20px 22px' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>Continue Learning</div>
+              <div style={{
+                display: 'flex', gap: 20, alignItems: 'center',
+                background: 'var(--bg3)', borderRadius: 12,
+                border: '1px solid var(--border)', overflow: 'hidden',
+              }}>
+                {/* Thumbnail */}
+                <div style={{
+                  width: 180, height: 110, flexShrink: 0,
+                  background: 'linear-gradient(135deg, var(--bg2), var(--bg3))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <div style={{
+                    width: 42, height: 42, borderRadius: '50%',
+                    background: 'var(--accent-l)', border: '2px solid var(--accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  }} onClick={() => navigate('/video-task')}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)">
+                      <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
                   </div>
                 </div>
-                <button className="btn-primary" style={{ padding: '8px 14px', fontSize: 13 }}>Resume →</button>
+                {/* Info */}
+                <div style={{ flex: 1, padding: '16px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span className="badge badge-cyan" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {continueLearning.type}
+                    </span>
+                    {continueLearning.duration && (
+                      <span style={{ fontSize: 11, color: 'var(--text3)' }}>⏱ {continueLearning.duration} duration</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', lineHeight: 1.5, marginBottom: 8, maxWidth: 480 }}>
+                    {continueLearning.title}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>🕐 Last viewed recently</div>
+                </div>
+                {/* Resume */}
+                <div style={{ padding: '0 22px', flexShrink: 0 }}>
+                  <button onClick={() => navigate('/video-task')} className="btn-primary" style={{ padding: '10px 22px' }}>
+                    Resume →
+                  </button>
+                </div>
               </div>
             </div>
           )}
-        </PageWrapper>
-      </main>
+
+        </main>
+      </div>
+
+      {/* Upgrade to Pro Modal */}
+      {showUpgrade && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }} onClick={() => setShowUpgrade(false)}>
+          <div style={{
+            background: 'var(--card)', border: '1px solid var(--accent)',
+            borderRadius: 18, padding: 32, maxWidth: 420, width: '100%',
+            animation: 'fadeUp 0.2s ease both', boxShadow: 'var(--shadow)',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>⚡</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>Upgrade to Pro</div>
+              <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.6 }}>
+                Unlock unlimited AI reviews, advanced projects, and priority support.
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+              {['Unlimited AI code reviews', 'Advanced mini projects', 'Priority job readiness report', 'GitHub deep analysis', 'Certificate generation'].map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text2)' }}>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    background: 'var(--accent-l)', border: '1px solid var(--accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 10, color: 'var(--accent)',
+                  }}>✓</div>
+                  {f}
+                </div>
+              ))}
+            </div>
+            <button className="btn-primary" style={{ width: '100%', padding: '13px', fontSize: 15 }}>
+              Coming Soon 🚀
+            </button>
+            <button onClick={() => setShowUpgrade(false)} className="btn-secondary" style={{ width: '100%', marginTop: 10, padding: '10px' }}>
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

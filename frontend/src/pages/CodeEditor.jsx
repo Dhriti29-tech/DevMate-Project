@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import Editor from '@monaco-editor/react'
 import Sidebar from '../components/Sidebar'
 import { apiRequest } from '../utils/api'
 
@@ -410,9 +411,10 @@ export default function CodeEditor() {
             )}
           </div>
 
-          {/* ── Centre: code textarea ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid #e8e8e4' }}>
-            <div style={{ padding: '7px 14px', background: 'var(--bg3)', borderBottom: '1px solid #e8e8e4', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* ── Centre: Monaco Editor ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)' }}>
+            {/* Editor title bar */}
+            <div style={{ padding: '7px 14px', background: 'var(--bg3)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
               {['#e55', '#f59e0b', '#22c55e'].map((c, i) => (
                 <div key={i} style={{ width: 11, height: 11, borderRadius: '50%', background: c }} />
               ))}
@@ -421,18 +423,38 @@ export default function CodeEditor() {
               </span>
             </div>
 
-            <textarea
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              spellCheck={false}
-              style={{
-                flex: 1, padding: '18px 22px', background: '#0d1117',
-                color: '#e6edf3', fontSize: 13.5,
-                fontFamily: 'ui-monospace, Consolas, "Courier New", monospace',
-                lineHeight: 1.75, border: 'none', outline: 'none', resize: 'none',
-                tabSize: 2,
-              }}
-            />
+            {/* Monaco Editor */}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <Editor
+                height="100%"
+                language={
+                  ctx.language === 'HTML' ? 'html'
+                  : ctx.language === 'CSS' ? 'css'
+                  : ctx.language === 'Python' ? 'python'
+                  : 'javascript'
+                }
+                value={code}
+                onChange={(val) => setCode(val || '')}
+                theme="vs-dark"
+                options={{
+                  fontSize: 14,
+                  fontFamily: 'ui-monospace, JetBrains Mono, Consolas, monospace',
+                  lineHeight: 1.75,
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  wordWrap: 'on',
+                  tabSize: 2,
+                  automaticLayout: true,
+                  padding: { top: 16, bottom: 16 },
+                  smoothScrolling: true,
+                  cursorBlinking: 'smooth',
+                  renderLineHighlight: 'gutter',
+                  bracketPairColorization: { enabled: true },
+                  formatOnPaste: true,
+                  suggestOnTriggerCharacters: true,
+                }}
+              />
+            </div>
 
             {/* Output strip */}
             <div style={{
